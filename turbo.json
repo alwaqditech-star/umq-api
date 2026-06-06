@@ -49,7 +49,7 @@
     },
     "db:seed": {
       "cache": false,
-      "dependsOn": ["db:generate"]
+      "dependsOn": ["db:generate", "@umq/shared#build"]
     },
     "@umq/shared#build": {
       "outputs": ["dist/**"]
