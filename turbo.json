@@ -1,0 +1,58 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
+  "globalEnv": [
+    "DATABASE_URL",
+    "LEGACY_DATABASE_URL",
+    "NODE_ENV",
+    "API_PORT",
+    "CORS_ORIGIN",
+    "WEB_ORIGIN",
+    "JWT_SECRET",
+    "SEED_ADMIN_PASSWORD",
+    "AUTH_COOKIE_SECURE",
+    "PUBLIC_API_URL",
+    "UPLOAD_DIR"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"]
+    },
+    "@umq/api#build": {
+      "dependsOn": ["^build", "@umq/database#db:generate"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "@umq/api#check-types": {
+      "dependsOn": ["^check-types", "@umq/database#db:generate"]
+    },
+    "@umq/database#check-types": {
+      "dependsOn": ["db:generate"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:seed": {
+      "cache": false,
+      "dependsOn": ["db:generate"]
+    },
+    "@umq/shared#build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}

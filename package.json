@@ -1,0 +1,27 @@
+{
+  "name": "umq-api",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "node scripts/free-dev-ports.mjs api && pnpm db:generate && pnpm --filter @umq/shared build && pnpm --filter @umq/api dev",
+    "dev:api": "node scripts/free-dev-ports.mjs api && pnpm db:generate && pnpm --filter @umq/shared build && pnpm --filter @umq/api dev",
+    "dev:free-ports": "node scripts/free-dev-ports.mjs api",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
+    "check-types": "turbo run check-types",
+    "db:generate": "turbo run db:generate --filter=@umq/database",
+    "db:migrate": "turbo run db:migrate --filter=@umq/database",
+    "db:seed": "turbo run db:seed --filter=@umq/database",
+    "db:migrate-from-omq": "pnpm --filter @umq/database db:migrate-from-omq"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.4",
+    "turbo": "^2.9.16",
+    "typescript": "5.9.2"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18"
+  }
+}

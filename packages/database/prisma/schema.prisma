@@ -1,0 +1,473 @@
+// UMQ Platform — Phase 1 database schema
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Locale {
+  AR
+  EN
+}
+
+// ─── Identity & Access ───────────────────────────────────────────────────────
+
+model User {
+  id                String    @id @default(uuid()) @db.Char(36)
+  email             String
+  passwordHash      String    @map("password_hash")
+  firstName         String    @map("first_name")
+  lastName          String    @map("last_name")
+  avatarMediaId     String?   @map("avatar_media_id") @db.Char(36)
+  roleId            String    @map("role_id") @db.Char(36)
+  isActive          Boolean   @default(true) @map("is_active")
+  locale            Locale    @default(AR)
+  lastLoginAt       DateTime? @map("last_login_at")
+  failedLoginCount  Int       @default(0) @map("failed_login_count")
+  lockedUntil       DateTime? @map("locked_until")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdById       String?   @map("created_by_id") @db.Char(36)
+  updatedById       String?   @map("updated_by_id") @db.Char(36)
+
+  role              Role              @relation(fields: [roleId], references: [id])
+  avatarMedia       MediaLibrary?     @relation("UserAvatar", fields: [avatarMediaId], references: [id])
+  refreshTokens         RefreshToken[]
+  passwordResetTokens   PasswordResetToken[]
+  blogPosts             BlogPost[]        @relation("BlogPostAuthor")
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  assignedContacts  Contact[]         @relation("ContactAssignee")
+  uploadedMedia     MediaLibrary[]    @relation("MediaUploader")
+
+  @@unique([email])
+  @@index([roleId])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Char(36)
+  name        String
+  slug        String
+  description String?
+  isSystem    Boolean   @default(false) @map("is_system")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@unique([slug])
+  @@map("roles")
+}
+
+model Permission {
+  id        String    @id @default(uuid()) @db.Char(36)
+  name      String
+  slug      String
+  module    String
+  action    String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  rolePermissions RolePermission[]
+
+  @@unique([slug])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(uuid()) @db.Char(36)
+  roleId       String   @map("role_id") @db.Char(36)
+  permissionId String   @map("permission_id") @db.Char(36)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ─── Services & Portfolio ────────────────────────────────────────────────────
+
+model Service {
+  id        String        @id @default(uuid()) @db.Char(36)
+  slug      String
+  titleAr   String        @map("title_ar")
+  titleEn   String        @map("title_en")
+  summaryAr String?       @map("summary_ar") @db.Text
+  summaryEn String?       @map("summary_en") @db.Text
+  contentAr String?       @map("content_ar") @db.Text
+  contentEn String?       @map("content_en") @db.Text
+  icon      String?
+  order     Int           @default(0)
+  featured  Boolean       @default(false)
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  deletedAt DateTime?     @map("deleted_at")
+  createdById String?     @map("created_by_id") @db.Char(36)
+  updatedById String?     @map("updated_by_id") @db.Char(36)
+
+  @@unique([slug])
+  @@index([status, order])
+  @@map("services")
+}
+
+model ProjectCategory {
+  id        String    @id @default(uuid()) @db.Char(36)
+  slug      String
+  nameAr    String    @map("name_ar")
+  nameEn    String    @map("name_en")
+  order     Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  projects Project[]
+
+  @@unique([slug])
+  @@map("project_categories")
+}
+
+model Project {
+  id              String        @id @default(uuid()) @db.Char(36)
+  categoryId      String?       @map("category_id") @db.Char(36)
+  slug            String
+  titleAr         String        @map("title_ar")
+  titleEn         String        @map("title_en")
+  summaryAr       String?       @map("summary_ar") @db.Text
+  summaryEn       String?       @map("summary_en") @db.Text
+  contentAr       String?       @map("content_ar") @db.Text
+  contentEn       String?       @map("content_en") @db.Text
+  clientName      String?       @map("client_name")
+  technologies    Json          @default("[]")
+  coverMediaId    String?       @map("cover_media_id") @db.Char(36)
+  completedAt     DateTime?     @map("completed_at")
+  order           Int           @default(0)
+  featured        Boolean       @default(false)
+  status          ContentStatus @default(DRAFT)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  createdById     String?       @map("created_by_id") @db.Char(36)
+  updatedById     String?       @map("updated_by_id") @db.Char(36)
+
+  category   ProjectCategory? @relation(fields: [categoryId], references: [id])
+  coverMedia MediaLibrary?    @relation("ProjectCover", fields: [coverMediaId], references: [id])
+
+  @@unique([slug])
+  @@index([categoryId, status])
+  @@map("projects")
+}
+
+// ─── Blog ────────────────────────────────────────────────────────────────────
+
+model BlogCategory {
+  id        String    @id @default(uuid()) @db.Char(36)
+  slug      String
+  nameAr    String    @map("name_ar")
+  nameEn    String    @map("name_en")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  posts BlogPost[]
+
+  @@unique([slug])
+  @@map("blog_categories")
+}
+
+model BlogPost {
+  id            String        @id @default(uuid()) @db.Char(36)
+  categoryId    String?       @map("category_id") @db.Char(36)
+  authorId      String?       @map("author_id") @db.Char(36)
+  slug          String
+  locale        Locale
+  title         String
+  excerpt       String?       @db.Text
+  content       String        @db.Text
+  tags          Json          @default("[]")
+  coverMediaId  String?       @map("cover_media_id") @db.Char(36)
+  readingTime   Int?          @map("reading_time")
+  publishedAt   DateTime?     @map("published_at")
+  status        ContentStatus @default(DRAFT)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  deletedAt     DateTime?     @map("deleted_at")
+  createdById   String?       @map("created_by_id") @db.Char(36)
+  updatedById   String?       @map("updated_by_id") @db.Char(36)
+
+  category   BlogCategory?  @relation(fields: [categoryId], references: [id])
+  author     User?          @relation("BlogPostAuthor", fields: [authorId], references: [id])
+  coverMedia MediaLibrary?  @relation("BlogPostCover", fields: [coverMediaId], references: [id])
+
+  @@unique([slug, locale])
+  @@index([status, publishedAt])
+  @@map("blog_posts")
+}
+
+// ─── Marketing content ───────────────────────────────────────────────────────
+
+model TeamMember {
+  id          String        @id @default(uuid()) @db.Char(36)
+  nameAr      String        @map("name_ar")
+  nameEn      String        @map("name_en")
+  roleAr      String        @map("role_ar")
+  roleEn      String        @map("role_en")
+  bioAr       String?       @map("bio_ar") @db.Text
+  bioEn       String?       @map("bio_en") @db.Text
+  mediaId     String?       @map("media_id") @db.Char(36)
+  order       Int           @default(0)
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+
+  media MediaLibrary? @relation("TeamMemberPhoto", fields: [mediaId], references: [id])
+
+  @@index([status, order])
+  @@map("team_members")
+}
+
+model Partner {
+  id        String        @id @default(uuid()) @db.Char(36)
+  nameAr    String        @map("name_ar")
+  nameEn    String        @map("name_en")
+  url       String?
+  mediaId   String?       @map("media_id") @db.Char(36)
+  order     Int           @default(0)
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  deletedAt DateTime?     @map("deleted_at")
+
+  media MediaLibrary? @relation("PartnerLogo", fields: [mediaId], references: [id])
+
+  @@map("partners")
+}
+
+model Testimonial {
+  id         String        @id @default(uuid()) @db.Char(36)
+  authorAr   String        @map("author_ar")
+  authorEn   String        @map("author_en")
+  companyAr  String?       @map("company_ar")
+  companyEn  String?       @map("company_en")
+  contentAr  String        @map("content_ar") @db.Text
+  contentEn  String        @map("content_en") @db.Text
+  rating     Int?
+  order      Int           @default(0)
+  status     ContentStatus @default(DRAFT)
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  deletedAt  DateTime?     @map("deleted_at")
+
+  @@map("testimonials")
+}
+
+// ─── Engagement & CMS ────────────────────────────────────────────────────────
+
+model Contact {
+  id           String        @id @default(uuid()) @db.Char(36)
+  name         String
+  email        String
+  phone        String?
+  subject      String
+  message      String        @db.Text
+  status       ContactStatus @default(NEW)
+  assignedToId String?       @map("assigned_to_id") @db.Char(36)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  deletedAt    DateTime?     @map("deleted_at")
+
+  assignedTo User? @relation("ContactAssignee", fields: [assignedToId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("contacts")
+}
+
+model MediaLibrary {
+  id           String    @id @default(uuid()) @db.Char(36)
+  filename     String
+  mimeType     String    @map("mime_type")
+  size         Int
+  storageKey   String    @map("storage_key")
+  url          String
+  altAr        String?   @map("alt_ar")
+  altEn        String?   @map("alt_en")
+  width        Int?
+  height       Int?
+  folder       String    @default("general")
+  uploadedById String?   @map("uploaded_by_id") @db.Char(36)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  uploadedBy         User?         @relation("MediaUploader", fields: [uploadedById], references: [id])
+  userAvatars        User[]        @relation("UserAvatar")
+  projectCovers      Project[]     @relation("ProjectCover")
+  blogCovers         BlogPost[]    @relation("BlogPostCover")
+  teamPhotos         TeamMember[]  @relation("TeamMemberPhoto")
+  partnerLogos       Partner[]     @relation("PartnerLogo")
+  seoOgImages        SeoPage[]     @relation("SeoOgImage")
+
+  @@index([folder, deletedAt])
+  @@map("media_library")
+}
+
+model WebsiteSection {
+  id        String        @id @default(uuid()) @db.Char(36)
+  key       String
+  type      String
+  content   Json
+  locale    Locale?
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  deletedAt DateTime?     @map("deleted_at")
+
+  @@unique([key, locale])
+  @@map("website_sections")
+}
+
+/// Homepage section visibility, order, and display labels (CMS)
+model HomeSection {
+  id        String   @id @default(uuid()) @db.Char(36)
+  key       String
+  labelAr   String   @map("label_ar")
+  labelEn   String   @map("label_en")
+  isEnabled Boolean  @default(true) @map("is_enabled")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([key])
+  @@index([isEnabled, sortOrder])
+  @@map("home_sections")
+}
+
+model SeoPage {
+  id              String    @id @default(uuid()) @db.Char(36)
+  path            String
+  locale          Locale
+  title           String
+  description     String?   @db.Text
+  ogImageMediaId  String?   @map("og_image_media_id") @db.Char(36)
+  canonical       String?
+  robots          String?   @default("index,follow")
+  structuredData  Json?     @map("structured_data")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  ogImageMedia MediaLibrary? @relation("SeoOgImage", fields: [ogImageMediaId], references: [id])
+
+  @@unique([path, locale])
+  @@map("seo_pages")
+}
+
+model Setting {
+  id        String   @id @default(uuid()) @db.Char(36)
+  key       String
+  value     Json
+  group     String   @default("general")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([key])
+  @@map("settings")
+}
+
+// ─── Platform ────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  type      String
+  title     String
+  body      String    @db.Text
+  readAt    DateTime? @map("read_at")
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Char(36)
+  userId     String?  @map("user_id") @db.Char(36)
+  action     String
+  entity     String
+  entityId   String?  @map("entity_id")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
