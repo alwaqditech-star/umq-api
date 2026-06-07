@@ -12,7 +12,7 @@ if (!process.env.DATABASE_URL) {
 const run = (command) =>
   execSync(command, {
     stdio: "inherit",
-    env: process.env,
+    env: { ...process.env, NODE_ENV: "development" },
     cwd: monorepoRoot,
   });
 
