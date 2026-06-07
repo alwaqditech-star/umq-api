@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const monorepoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const monorepoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
