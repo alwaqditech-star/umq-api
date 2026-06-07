@@ -2,6 +2,7 @@
   "name": "umq-api",
   "private": true,
   "scripts": {
+    "vercel-build": "pnpm --filter @umq/database exec prisma generate && pnpm --filter @umq/shared build && pnpm --filter @umq/api build",
     "build": "turbo run build",
     "dev": "node scripts/free-dev-ports.mjs api && pnpm db:generate && pnpm --filter @umq/shared build && pnpm --filter @umq/api dev",
     "dev:api": "node scripts/free-dev-ports.mjs api && pnpm db:generate && pnpm --filter @umq/shared build && pnpm --filter @umq/api dev",
@@ -15,7 +16,11 @@
     "db:seed": "turbo run db:seed --filter=@umq/database",
     "db:migrate-from-omq": "pnpm --filter @umq/database db:migrate-from-omq"
   },
+  "dependencies": {
+    "@codegenie/serverless-express": "^4.16.0"
+  },
   "devDependencies": {
+    "@vercel/node": "^5.1.14",
     "prettier": "^3.7.4",
     "turbo": "^2.9.16",
     "typescript": "5.9.2"
