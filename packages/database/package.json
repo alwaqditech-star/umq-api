@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
-    "@umq/shared": "workspace:*"
+    "@umq/shared": "workspace:*",
+    "prisma": "^6.19.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -34,7 +35,6 @@
     "dotenv-cli": "^8.0.0",
     "eslint": "^9.39.1",
     "mysql2": "^3.14.1",
-    "prisma": "^6.19.0",
     "tsx": "^4.20.5",
     "typescript": "5.9.2"
   }

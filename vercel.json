@@ -2,14 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm vercel-build",
+  "buildCommand": "node scripts/vercel-build.mjs",
   "framework": null,
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "rewrites": [{ "source": "/(.*)", "destination": "/apps/api/api" }],
   "functions": {
-    "api/index.ts": {
+    "apps/api/api/index.ts": {
       "memory": 1024,
       "maxDuration": 60,
-      "includeFiles": "{node_modules/.prisma/**,apps/api/dist/**}"
+      "includeFiles": "apps/api/dist/**"
     }
   }
 }

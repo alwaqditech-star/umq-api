@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import serverlessExpress from "@codegenie/serverless-express";
-import { createApp } from "../apps/api/dist/bootstrap-app";
+import { createApp } from "../dist/bootstrap-app";
 
 type ServerlessHandler = (
   req: VercelRequest,
