@@ -1,6 +1,5 @@
 import "reflect-metadata";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { Application } from "express";
 import serverlessExpress from "@codegenie/serverless-express";
 import { createApp } from "../dist/bootstrap-app";
 
@@ -21,10 +20,7 @@ export default async function handler(
       status: "error",
       message: "API bootstrap failed",
       hint: "Check Vercel env vars (DATABASE_URL, JWT_SECRET) and Runtime Logs",
-      detail:
-        process.env.NODE_ENV === "production"
-          ? bootstrapError.message
-          : bootstrapError.stack,
+      detail: bootstrapError.message,
     });
     return;
   }
@@ -32,14 +28,17 @@ export default async function handler(
   try {
     if (!cachedHandler) {
       if (!process.env.DATABASE_URL) {
-        throw new Error("DATABASE_URL is not set in Vercel Environment Variables");
+        throw new Error(
+          "DATABASE_URL is not set in Vercel Environment Variables",
+        );
       }
 
       const app = await createApp();
       await app.init();
-      const expressApp = app.getHttpAdapter().getInstance() as Application;
+      const expressApp = app.getHttpAdapter().getInstance();
+
       cachedHandler = serverlessExpress({
-        app: expressApp,
+        app: expressApp as any,
       }) as ServerlessHandler;
     }
 
