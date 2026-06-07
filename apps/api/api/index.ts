@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { Application } from "express";
 import serverlessExpress from "@codegenie/serverless-express";
 import { createApp } from "../dist/bootstrap-app";
 
@@ -16,7 +17,7 @@ export default async function handler(
   if (!cachedHandler) {
     const app = await createApp();
     await app.init();
-    const expressApp = app.getHttpAdapter().getInstance();
+    const expressApp = app.getHttpAdapter().getInstance() as Application;
     cachedHandler = serverlessExpress({
       app: expressApp,
     }) as ServerlessHandler;
