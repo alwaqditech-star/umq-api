@@ -1,14 +1,9 @@
 import "reflect-metadata";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import serverlessExpress from "@codegenie/serverless-express";
+import type { Application } from "express";
 import { createApp } from "../dist/bootstrap-app";
 
-type ServerlessHandler = (
-  req: VercelRequest,
-  res: VercelResponse,
-) => void | Promise<void>;
-
-let cachedHandler: ServerlessHandler | undefined;
+let expressApp: Application | undefined;
 let bootstrapError: Error | undefined;
 
 export default async function handler(
@@ -26,7 +21,7 @@ export default async function handler(
   }
 
   try {
-    if (!cachedHandler) {
+    if (!expressApp) {
       if (!process.env.DATABASE_URL) {
         throw new Error(
           "DATABASE_URL is not set in Vercel Environment Variables",
@@ -35,14 +30,10 @@ export default async function handler(
 
       const app = await createApp();
       await app.init();
-      const expressApp = app.getHttpAdapter().getInstance();
-
-      cachedHandler = serverlessExpress({
-        app: expressApp as any,
-      }) as ServerlessHandler;
+      expressApp = app.getHttpAdapter().getInstance() as Application;
     }
 
-    return cachedHandler(req, res);
+    expressApp(req, res);
   } catch (error) {
     bootstrapError =
       error instanceof Error ? error : new Error("Unknown bootstrap error");
