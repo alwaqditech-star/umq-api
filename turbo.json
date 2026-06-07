@@ -12,7 +12,8 @@
     "SEED_ADMIN_PASSWORD",
     "AUTH_COOKIE_SECURE",
     "PUBLIC_API_URL",
-    "UPLOAD_DIR"
+    "UPLOAD_DIR",
+    "VERCEL"
   ],
   "tasks": {
     "build": {
