@@ -7,7 +7,15 @@ import { PrismaService } from "../prisma/prisma.service";
 const projectInclude = {
   category: true,
   coverMedia: true,
+  images: {
+    orderBy: { sortOrder: "asc" as const },
+    include: { media: true },
+  },
 } as const;
+
+type ProjectWithRelations = Prisma.ProjectGetPayload<{
+  include: typeof projectInclude;
+}>;
 
 @Injectable()
 export class ProjectsService {
@@ -24,6 +32,12 @@ export class ProjectsService {
         .filter(Boolean);
     }
     return [];
+  }
+
+  private parseImageMediaIds(value: unknown): string[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) return [];
+    return value.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
   }
 
   private mapStatus(status: ContentStatus): "published" | "draft" | "inactive" {
@@ -47,7 +61,7 @@ export class ProjectsService {
     return cat?.id ?? null;
   }
 
-  /** Same pattern as blog seed: external https URL or uploaded media id. */
+  /** External https URL or uploaded media id for a single cover fallback. */
   private async resolveCoverMediaId(opts: {
     coverMediaId?: string | null;
     coverExternalUrl?: string;
@@ -89,6 +103,37 @@ export class ProjectsService {
     return undefined;
   }
 
+  private async syncProjectImages(projectId: string, mediaIds: string[]) {
+    const unique = [...new Set(mediaIds.filter(Boolean))];
+
+    await this.prisma.projectImage.deleteMany({
+      where: {
+        projectId,
+        ...(unique.length > 0
+          ? { mediaId: { notIn: unique } }
+          : {}),
+      },
+    });
+
+    for (let i = 0; i < unique.length; i++) {
+      const mediaId = unique[i]!;
+      await this.prisma.projectImage.upsert({
+        where: { projectId_mediaId: { projectId, mediaId } },
+        create: { projectId, mediaId, sortOrder: i },
+        update: { sortOrder: i },
+      });
+    }
+  }
+
+  private async reloadProject(id: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id, deletedAt: null },
+      include: projectInclude,
+    });
+    if (!project) throw new NotFoundException("Project not found");
+    return this.mapProject(project);
+  }
+
   private async releaseSoftDeletedSlug(slug: string) {
     const existing = await this.prisma.project.findUnique({
       where: { slug },
@@ -111,34 +156,36 @@ export class ProjectsService {
     throw error;
   }
 
-  private mapProject(project: {
-    id: string;
-    slug: string;
-    titleAr: string;
-    titleEn: string;
-    summaryAr: string | null;
-    summaryEn: string | null;
-    contentAr: string | null;
-    contentEn: string | null;
-    clientName: string | null;
-    technologies: unknown;
-    order: number;
-    featured: boolean;
-    status: ContentStatus;
-    categoryId: string | null;
-    category: { nameAr: string; nameEn: string; slug: string } | null;
-    coverMedia?: {
-      id: string;
-      url: string;
-      altAr: string | null;
-      altEn: string | null;
-    } | null;
-  }) {
+  private mapProject(project: ProjectWithRelations) {
+    const galleryUrls =
+      project.images
+        ?.map((row) => row.media?.url)
+        .filter((url): url is string => Boolean(url)) ?? [];
+    const galleryIds =
+      project.images
+        ?.map((row) => row.media?.id)
+        .filter((id): id is string => Boolean(id)) ?? [];
+
+    const imageUrls =
+      galleryUrls.length > 0
+        ? galleryUrls
+        : project.coverMedia?.url
+          ? [project.coverMedia.url]
+          : [];
+    const imageMediaIds =
+      galleryIds.length > 0
+        ? galleryIds
+        : project.coverMedia?.id
+          ? [project.coverMedia.id]
+          : [];
+
     return {
       id: project.id,
       slug: project.slug,
-      coverMediaId: project.coverMedia?.id ?? null,
-      coverImageUrl: project.coverMedia?.url ?? "",
+      coverMediaId: imageMediaIds[0] ?? null,
+      coverImageUrl: imageUrls[0] ?? "",
+      imageUrls,
+      imageMediaIds,
       titleAr: project.titleAr,
       titleEn: project.titleEn,
       summaryAr: project.summaryAr ?? "",
@@ -202,16 +249,24 @@ export class ProjectsService {
     status?: string;
     coverMediaId?: string | null;
     coverExternalUrl?: string;
+    imageMediaIds?: string[];
   }) {
     try {
       const categoryId = await this.resolveCategoryId(data.categorySlug);
       const slug = data.slug.trim();
       await this.releaseSoftDeletedSlug(slug);
 
-      const coverMediaId = await this.resolveCoverMediaId({
-        coverMediaId: data.coverMediaId,
-        coverExternalUrl: data.coverExternalUrl,
-      });
+      const galleryIds = this.parseImageMediaIds(data.imageMediaIds) ?? [];
+      let coverMediaId: string | null | undefined;
+
+      if (galleryIds.length > 0) {
+        coverMediaId = galleryIds[0]!;
+      } else {
+        coverMediaId = await this.resolveCoverMediaId({
+          coverMediaId: data.coverMediaId,
+          coverExternalUrl: data.coverExternalUrl,
+        });
+      }
 
       const project = await this.prisma.project.create({
         data: {
@@ -230,9 +285,19 @@ export class ProjectsService {
           status: this.parseStatus(data.status) ?? ContentStatus.DRAFT,
           coverMediaId: coverMediaId ?? null,
         },
-        include: projectInclude,
       });
-      return this.mapProject(project);
+
+      const idsToSync =
+        galleryIds.length > 0
+          ? galleryIds
+          : coverMediaId
+            ? [coverMediaId]
+            : [];
+      if (idsToSync.length > 0) {
+        await this.syncProjectImages(project.id, idsToSync);
+      }
+
+      return this.reloadProject(project.id);
     } catch (error) {
       this.handleWriteError(error);
     }
@@ -256,6 +321,7 @@ export class ProjectsService {
       status: string;
       coverMediaId: string | null;
       coverExternalUrl: string;
+      imageMediaIds: string[];
     }>,
   ) {
     try {
@@ -265,6 +331,7 @@ export class ProjectsService {
         technologies,
         coverMediaId,
         coverExternalUrl,
+        imageMediaIds,
         ...rest
       } = data;
 
@@ -278,11 +345,18 @@ export class ProjectsService {
         select: { coverMediaId: true },
       });
 
-      const resolvedCover = await this.resolveCoverMediaId({
-        coverMediaId,
-        coverExternalUrl,
-        existingCoverMediaId: existing?.coverMediaId,
-      });
+      const galleryIds = this.parseImageMediaIds(imageMediaIds);
+      let resolvedCover: string | null | undefined;
+
+      if (galleryIds !== undefined) {
+        resolvedCover = galleryIds.length > 0 ? galleryIds[0]! : null;
+      } else {
+        resolvedCover = await this.resolveCoverMediaId({
+          coverMediaId,
+          coverExternalUrl,
+          existingCoverMediaId: existing?.coverMediaId,
+        });
+      }
 
       if (rest.slug !== undefined) {
         const slug = rest.slug.trim();
@@ -290,7 +364,7 @@ export class ProjectsService {
         rest.slug = slug;
       }
 
-      const project = await this.prisma.project.update({
+      await this.prisma.project.update({
         where: { id },
         data: {
           ...rest,
@@ -301,9 +375,20 @@ export class ProjectsService {
           ...(status !== undefined ? { status: this.parseStatus(status) } : {}),
           ...(resolvedCover !== undefined ? { coverMediaId: resolvedCover } : {}),
         },
-        include: projectInclude,
       });
-      return this.mapProject(project);
+
+      if (galleryIds !== undefined) {
+        await this.syncProjectImages(id, galleryIds);
+      } else if (resolvedCover && galleryIds === undefined) {
+        const currentImages = await this.prisma.projectImage.count({
+          where: { projectId: id },
+        });
+        if (currentImages === 0 && resolvedCover) {
+          await this.syncProjectImages(id, [resolvedCover]);
+        }
+      }
+
+      return this.reloadProject(id);
     } catch (error) {
       this.handleWriteError(error);
     }
