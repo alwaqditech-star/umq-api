@@ -28,6 +28,7 @@
     "@umq/shared": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "@vercel/blob": "^0.27.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },

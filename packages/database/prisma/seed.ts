@@ -380,9 +380,32 @@ async function main() {
     },
   });
 
+  const adminUser = await prisma.user.findUnique({
+    where: { email: "admin@umq.sa" },
+  });
+
+  const projectCoverMediaId = "22222222-2222-4222-8222-222222222202";
+  const projectCoverUrl =
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&q=80";
+
+  await prisma.mediaLibrary.upsert({
+    where: { id: projectCoverMediaId },
+    update: { url: projectCoverUrl },
+    create: {
+      id: projectCoverMediaId,
+      filename: "umq-platform-cover.jpg",
+      mimeType: "image/jpeg",
+      size: 0,
+      storageKey: "seed/projects/umq-platform-cover.jpg",
+      url: projectCoverUrl,
+      folder: "projects",
+      uploadedById: adminUser?.id,
+    },
+  });
+
   await prisma.project.upsert({
     where: { slug: "umq-platform" },
-    update: {},
+    update: { coverMediaId: projectCoverMediaId },
     create: {
       slug: "umq-platform",
       titleAr: "منصة عُمْق",
@@ -392,6 +415,7 @@ async function main() {
       clientName: "UMQ",
       technologies: ["Next.js", "NestJS", "MySQL"],
       categoryId: projectCategory.id,
+      coverMediaId: projectCoverMediaId,
       featured: true,
       status: ContentStatus.PUBLISHED,
     },
@@ -405,10 +429,6 @@ async function main() {
       nameAr: "رؤى تقنية",
       nameEn: "Tech Insights",
     },
-  });
-
-  const adminUser = await prisma.user.findUnique({
-    where: { email: "admin@umq.sa" },
   });
 
   const blogCoverMediaId = "11111111-1111-4111-8111-111111111101";

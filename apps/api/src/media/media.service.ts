@@ -39,11 +39,12 @@ export class MediaService {
     }
   }
 
-  private publicBaseUrl(): string {
-    const port = this.config.get<string>("API_PORT") ?? "4001";
-    const explicit = this.config.get<string>("PUBLIC_API_URL");
-    if (explicit) return explicit.replace(/\/$/, "");
-    return `http://127.0.0.1:${port}/api/v1`;
+  private blobToken(): string | undefined {
+    return this.config.get<string>("BLOB_READ_WRITE_TOKEN")?.trim() || undefined;
+  }
+
+  private useBlobStorage(): boolean {
+    return Boolean(this.blobToken());
   }
 
   private fileUrl(storageKey: string): string {
@@ -58,6 +59,12 @@ export class MediaService {
     return this.prisma.mediaLibrary.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async findByStorageKey(storageKey: string) {
+    return this.prisma.mediaLibrary.findFirst({
+      where: { storageKey, deletedAt: null },
     });
   }
 
@@ -76,16 +83,33 @@ export class MediaService {
 
     const ext = path.extname(file.originalname) || "";
     const storageKey = `${meta.folder ?? "general"}/${randomUUID()}${ext}`;
-    const absolutePath = path.join(this.uploadDir, storageKey);
 
-    await mkdir(path.dirname(absolutePath), { recursive: true });
-    if (file.buffer) {
-      await writeFile(absolutePath, file.buffer);
-    } else if (file.path) {
-      const { copyFile } = await import("node:fs/promises");
-      await copyFile(file.path, absolutePath);
+    let publicUrl: string;
+
+    if (this.useBlobStorage()) {
+      const buffer = file.buffer ?? (file.path ? await import("node:fs/promises").then((fs) => fs.readFile(file.path!)) : null);
+      if (!buffer) throw new BadRequestException("Invalid upload payload");
+
+      const { put } = await import("@vercel/blob");
+      const blob = await put(storageKey, buffer, {
+        access: "public",
+        token: this.blobToken(),
+        contentType: file.mimetype,
+        addRandomSuffix: false,
+      });
+      publicUrl = blob.url;
     } else {
-      throw new BadRequestException("Invalid upload payload");
+      const absolutePath = path.join(this.uploadDir, storageKey);
+      await mkdir(path.dirname(absolutePath), { recursive: true });
+      if (file.buffer) {
+        await writeFile(absolutePath, file.buffer);
+      } else if (file.path) {
+        const { copyFile } = await import("node:fs/promises");
+        await copyFile(file.path, absolutePath);
+      } else {
+        throw new BadRequestException("Invalid upload payload");
+      }
+      publicUrl = this.fileUrl(storageKey);
     }
 
     return this.prisma.mediaLibrary.create({
@@ -94,7 +118,7 @@ export class MediaService {
         mimeType: file.mimetype,
         size: file.size,
         storageKey,
-        url: this.fileUrl(storageKey),
+        url: publicUrl,
         folder: meta.folder ?? "general",
         altAr: meta.altAr,
         altEn: meta.altEn,
@@ -109,9 +133,14 @@ export class MediaService {
     });
     if (!item) throw new NotFoundException("Media not found");
 
-    const absolutePath = path.join(this.uploadDir, item.storageKey);
-    if (existsSync(absolutePath)) {
-      await unlink(absolutePath).catch(() => undefined);
+    if (item.url.includes("blob.vercel-storage.com") && this.blobToken()) {
+      const { del } = await import("@vercel/blob");
+      await del(item.url, { token: this.blobToken() }).catch(() => undefined);
+    } else {
+      const absolutePath = path.join(this.uploadDir, item.storageKey);
+      if (existsSync(absolutePath)) {
+        await unlink(absolutePath).catch(() => undefined);
+      }
     }
 
     await this.prisma.mediaLibrary.update({

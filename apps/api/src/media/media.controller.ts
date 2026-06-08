@@ -68,11 +68,20 @@ export class MediaFilesController {
   constructor(private readonly media: MediaService) {}
 
   @Get("*")
-  serve(@Req() req: Request, @Res() res: Response) {
+  async serve(@Req() req: Request, @Res() res: Response) {
     const storageKey = decodeURIComponent(
       req.path.replace(/^\/api\/v1\/media\/files\/?/, ""),
     );
-    const { stream } = this.media.resolveFileStream(storageKey);
-    stream.pipe(res);
+    try {
+      const { stream } = this.media.resolveFileStream(storageKey);
+      stream.pipe(res);
+    } catch {
+      const item = await this.media.findByStorageKey(storageKey);
+      if (item?.url.startsWith("http")) {
+        res.redirect(302, item.url);
+        return;
+      }
+      res.status(404).json({ message: "File not found" });
+    }
   }
 }
