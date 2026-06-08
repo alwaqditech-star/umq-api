@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createReadStream, existsSync, mkdirSync } from "node:fs";
@@ -45,6 +46,20 @@ export class MediaService {
 
   private useBlobStorage(): boolean {
     return Boolean(this.blobToken());
+  }
+
+  /** Vercel serverless has no persistent local disk — uploads need Blob storage. */
+  private requiresBlobStorage(): boolean {
+    return process.env.VERCEL === "1";
+  }
+
+  private assertUploadStorageReady(): void {
+    if (this.requiresBlobStorage() && !this.useBlobStorage()) {
+      throw new ServiceUnavailableException(
+        "Media uploads on Vercel require BLOB_READ_WRITE_TOKEN. " +
+          "Create a Blob store in Vercel → Storage and link it to the API project, then redeploy.",
+      );
+    }
   }
 
   private fileUrl(storageKey: string): string {
@@ -106,6 +121,8 @@ export class MediaService {
     if (file.size > MAX_BYTES) {
       throw new BadRequestException("File exceeds 10MB limit");
     }
+
+    this.assertUploadStorageReady();
 
     const ext = path.extname(this.normalizeFilename(file.originalname)) || ".jpg";
     const storageKey = `${meta.folder ?? "general"}/${randomUUID()}${ext}`;
