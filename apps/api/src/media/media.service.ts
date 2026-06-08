@@ -68,6 +68,32 @@ export class MediaService {
     });
   }
 
+  private normalizeFilename(originalname: string): string {
+    let name = originalname;
+    try {
+      const utf8 = Buffer.from(originalname, "latin1").toString("utf8");
+      if (utf8 && utf8 !== originalname && !utf8.includes("\uFFFD")) {
+        name = utf8;
+      }
+    } catch {
+      /* keep original */
+    }
+
+    const ext = path.extname(name).toLowerCase() || ".jpg";
+    const base = path
+      .basename(name, path.extname(name))
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48);
+
+    if (base && /^[a-zA-Z0-9._-]+$/.test(base)) {
+      return `${base}${ext}`;
+    }
+    return `image-${randomUUID().slice(0, 8)}${ext}`;
+  }
+
   async upload(
     file: Express.Multer.File,
     meta: { folder?: string; altAr?: string; altEn?: string },
@@ -81,7 +107,7 @@ export class MediaService {
       throw new BadRequestException("File exceeds 10MB limit");
     }
 
-    const ext = path.extname(file.originalname) || "";
+    const ext = path.extname(this.normalizeFilename(file.originalname)) || ".jpg";
     const storageKey = `${meta.folder ?? "general"}/${randomUUID()}${ext}`;
 
     let publicUrl: string;
@@ -114,7 +140,7 @@ export class MediaService {
 
     return this.prisma.mediaLibrary.create({
       data: {
-        filename: file.originalname,
+        filename: this.normalizeFilename(file.originalname),
         mimeType: file.mimetype,
         size: file.size,
         storageKey,

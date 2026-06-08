@@ -384,28 +384,60 @@ async function main() {
     where: { email: "admin@umq.sa" },
   });
 
-  const projectCoverMediaId = "22222222-2222-4222-8222-222222222202";
-  const projectCoverUrl =
-    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&q=80";
-
-  await prisma.mediaLibrary.upsert({
-    where: { id: projectCoverMediaId },
-    update: { url: projectCoverUrl },
-    create: {
-      id: projectCoverMediaId,
+  const projectCovers = [
+    {
+      id: "22222222-2222-4222-8222-222222222202",
       filename: "umq-platform-cover.jpg",
-      mimeType: "image/jpeg",
-      size: 0,
+      url: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&q=80",
+      altAr: "منصة عُمْق",
+      altEn: "UMQ Platform",
       storageKey: "seed/projects/umq-platform-cover.jpg",
-      url: projectCoverUrl,
-      folder: "projects",
-      uploadedById: adminUser?.id,
     },
-  });
+    {
+      id: "33333333-3333-4333-8333-333333333303",
+      filename: "glorda-app-cover.jpg",
+      url: "https://images.unsplash.com/photo-1490759847861-5c8736cd3575?w=1200&q=80",
+      altAr: "تطبيق غلوردا",
+      altEn: "Glorda App",
+      storageKey: "seed/projects/glorda-app-cover.jpg",
+    },
+    {
+      id: "44444444-4444-4444-8444-444444444404",
+      filename: "umq-digital-cover.jpg",
+      url: "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=1200&q=80",
+      altAr: "حلول رقمية",
+      altEn: "UMQ Digital Solutions",
+      storageKey: "seed/projects/umq-digital-cover.jpg",
+    },
+  ] as const;
+
+  for (const cover of projectCovers) {
+    await prisma.mediaLibrary.upsert({
+      where: { id: cover.id },
+      update: {
+        url: cover.url,
+        filename: cover.filename,
+        altAr: cover.altAr,
+        altEn: cover.altEn,
+      },
+      create: {
+        id: cover.id,
+        filename: cover.filename,
+        mimeType: "image/jpeg",
+        size: 0,
+        storageKey: cover.storageKey,
+        url: cover.url,
+        folder: "projects",
+        altAr: cover.altAr,
+        altEn: cover.altEn,
+        uploadedById: adminUser?.id,
+      },
+    });
+  }
 
   await prisma.project.upsert({
     where: { slug: "umq-platform" },
-    update: { coverMediaId: projectCoverMediaId },
+    update: { coverMediaId: projectCovers[0].id },
     create: {
       slug: "umq-platform",
       titleAr: "منصة عُمْق",
@@ -415,8 +447,49 @@ async function main() {
       clientName: "UMQ",
       technologies: ["Next.js", "NestJS", "MySQL"],
       categoryId: projectCategory.id,
-      coverMediaId: projectCoverMediaId,
+      coverMediaId: projectCovers[0].id,
       featured: true,
+      order: 1,
+      status: ContentStatus.PUBLISHED,
+    },
+  });
+
+  await prisma.project.upsert({
+    where: { slug: "glorda-app" },
+    update: { coverMediaId: projectCovers[1].id },
+    create: {
+      slug: "glorda-app",
+      titleAr: "تطبيق غلوردا",
+      titleEn: "Glorda App",
+      summaryAr:
+        "منصة حديثة لبيع الزهور والهدايا والحلويات مع تجربة طلب سلسة.",
+      summaryEn:
+        "Modern platform for flowers, gifts, and sweets with a smooth ordering experience.",
+      clientName: "غلوردا - Glorda",
+      technologies: ["React", "Supabase", "Next.js"],
+      categoryId: projectCategory.id,
+      coverMediaId: projectCovers[1].id,
+      featured: true,
+      order: 2,
+      status: ContentStatus.PUBLISHED,
+    },
+  });
+
+  await prisma.project.upsert({
+    where: { slug: "umq-digital" },
+    update: { coverMediaId: projectCovers[2].id },
+    create: {
+      slug: "umq-digital",
+      titleAr: "حلول عُمْق الرقمية",
+      titleEn: "UMQ Digital Solutions",
+      summaryAr: "تطوير تطبيقات ومنصات رقمية للمؤسسات والشركات الناشئة.",
+      summaryEn: "Digital apps and platforms for enterprises and startups.",
+      clientName: "UMQ",
+      technologies: ["Next.js", "React Native", "Node.js"],
+      categoryId: projectCategory.id,
+      coverMediaId: projectCovers[2].id,
+      featured: true,
+      order: 3,
       status: ContentStatus.PUBLISHED,
     },
   });
