@@ -213,10 +213,26 @@ model Project {
 
   category   ProjectCategory? @relation(fields: [categoryId], references: [id])
   coverMedia MediaLibrary?    @relation("ProjectCover", fields: [coverMediaId], references: [id])
+  images     ProjectImage[]
 
   @@unique([slug])
   @@index([categoryId, status])
   @@map("projects")
+}
+
+model ProjectImage {
+  id        String   @id @default(uuid()) @db.Char(36)
+  projectId String   @map("project_id") @db.Char(36)
+  mediaId   String   @map("media_id") @db.Char(36)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  media   MediaLibrary @relation("ProjectGallery", fields: [mediaId], references: [id])
+
+  @@unique([projectId, mediaId])
+  @@index([projectId, sortOrder])
+  @@map("project_images")
 }
 
 // ─── Blog ────────────────────────────────────────────────────────────────────
@@ -363,7 +379,8 @@ model MediaLibrary {
 
   uploadedBy         User?         @relation("MediaUploader", fields: [uploadedById], references: [id])
   userAvatars        User[]        @relation("UserAvatar")
-  projectCovers      Project[]     @relation("ProjectCover")
+  projectCovers      Project[]      @relation("ProjectCover")
+  projectGallery     ProjectImage[] @relation("ProjectGallery")
   blogCovers         BlogPost[]    @relation("BlogPostCover")
   teamPhotos         TeamMember[]  @relation("TeamMemberPhoto")
   partnerLogos       Partner[]     @relation("PartnerLogo")
